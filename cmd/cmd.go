@@ -78,7 +78,7 @@ var globalFlags = []cli.Flag{
 	},
 	cli.StringFlag{
 		Name:  "proxy-path",
-		Usage: "path prefix when proxying the service",
+		Usage: "path prefix when service is run behind a proxy",
 		Value: "",
 	},
 	cli.StringFlag{
