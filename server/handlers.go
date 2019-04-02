@@ -290,6 +290,14 @@ func sanitize(fileName string) string {
 	return path.Base(fileName)
 }
 
+func getWordsPath() string {
+	value := os.Getenv("WORDS_PATH")
+	if len(value) == 0 {
+		return "xkpasswd-words.txt"
+	}
+	return value
+}
+
 func (s *Server) postHandler(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(_24K); nil != err {
 		s.logger.Printf("%s", err.Error())
