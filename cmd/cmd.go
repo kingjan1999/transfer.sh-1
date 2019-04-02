@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/dutchcoders/transfer.sh/server"
+	"github.com/kingjan1999/transfer.sh-1/server"
 	"github.com/fatih/color"
 	"github.com/minio/cli"
 	"google.golang.org/api/googleapi"

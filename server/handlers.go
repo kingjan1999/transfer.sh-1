@@ -58,6 +58,7 @@ import (
 	web "github.com/dutchcoders/transfer.sh-web"
 	"github.com/gorilla/mux"
 	"github.com/russross/blackfriday"
+	"github.com/kingjan1999/xkpasswd-go"
 
 	"encoding/base64"
 	qrcode "github.com/skip2/go-qrcode"
@@ -236,6 +237,14 @@ func sanitize(fileName string) string {
 	return path.Clean(path.Base(fileName))
 }
 
+func getWordsPath() string {
+	value := os.Getenv("WORDS_PATH")
+	if len(value) == 0 {
+		return "xkpasswd-words.txt"
+	}
+	return value
+}
+
 func (s *Server) postHandler(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(_24K); nil != err {
 		log.Printf("%s", err.Error())
@@ -243,7 +252,8 @@ func (s *Server) postHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token := Encode(10000000 + int64(rand.Intn(1000000000)))
+	// token := Encode(10000000 + int64(rand.Intn(1000000000)))
+	token := strings.ToLower(xkpasswd.GeneratePassword("wsw", "-", getWordsPath()))
 
 	w.Header().Set("Content-Type", "text/plain")
 
@@ -447,7 +457,8 @@ func (s *Server) putHandler(w http.ResponseWriter, r *http.Request) {
 		contentType = mime.TypeByExtension(filepath.Ext(vars["filename"]))
 	}
 
-	token := Encode(10000000 + int64(rand.Intn(1000000000)))
+	// token := Encode(10000000 + int64(rand.Intn(1000000000)))
+	token := strings.ToLower(xkpasswd.GeneratePassword("wsw", "-", getWordsPath()))
 
 	metadata := MetadataForRequest(contentType, r)
 
