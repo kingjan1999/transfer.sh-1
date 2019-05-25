@@ -4,6 +4,11 @@ Easy and fast file sharing from the command-line. This code contains the server 
 
 Transfer.sh currently supports the s3 (Amazon S3), gdrive (Google Drive) providers, and local file system (local).
 
+## Disclaimer
+This project repository has no relation with the service at https://transfer.sh that's managed by https://storj.io.
+So far we cannot address any issue related to the service at https://transfer.sh.
+
+
 ## Usage
 
 ### Upload:
@@ -26,12 +31,40 @@ $ curl https://transfer.sh/1lDau/test.txt|gpg -o- > /tmp/hello.txt
 $ curl -X PUT --upload-file nhgbhhj https://transfer.sh/test.txt/virustotal
 ```
 
+### Deleting
+```bash
+$ curl -X DELETE <X-Url-Delete Response Header URL>
+```
+
+## Request Headers
+
+### Max-Downloads
+```bash
+$ curl --upload-file ./hello.txt https://transfer.sh/hello.txt -H "Max-Downloads: 1" # Limit the number of downloads
+```
+
+### Max-Days
+```bash
+$ curl --upload-file ./hello.txt https://transfer.sh/hello.txt -H "Max-Days: 1" # Set the number of days before deletion
+```
+
+## Response Headers
+
+### X-Url-Delete
+
+The URL used to request the deletion of a file. Returned as a response header.
+```bash
+curl -sD - --upload-file ./hello https://transfer.sh/hello.txt | grep 'X-Url-Delete'
+X-Url-Delete: https://transfer.sh/hello.txt/BAYh0/hello.txt/PDw0NHPcqU
+```
+
 ## Add alias to .bashrc or .zshrc
 
 ### Using curl
 ```bash
 transfer() {
-    curl --progress-bar --upload-file "$1" https://transfer.sh/$(basename $1) | tee /dev/null;
+    curl --progress-bar --upload-file "$1" https://transfer.sh/$(basename "$1") | tee /dev/null;
+    echo
 }
 
 alias transfer=transfer
@@ -40,7 +73,8 @@ alias transfer=transfer
 ### Using wget
 ```bash
 transfer() {
-    wget -t 1 -qO - --method=PUT --body-file="$1" --header="Content-Type: $(file -b --mime-type $1)" https://transfer.sh/$(basename $1);
+    wget -t 1 -qO - --method=PUT --body-file="$1" --header="Content-Type: $(file -b --mime-type "$1")" https://transfer.sh/$(basename "$1");
+    echo
 }
 
 alias transfer=transfer
@@ -49,7 +83,7 @@ alias transfer=transfer
 ## Add alias for fish-shell
 
 ### Using curl
-```bash
+```fish
 function transfer --description 'Upload a file to transfer.sh'
     if [ $argv[1] ]
         # write to output to tmpfile because of progress bar
@@ -66,7 +100,7 @@ funcsave transfer
 ```
 
 ### Using wget
-```bash
+```fish
 function transfer --description 'Upload a file to transfer.sh'
     if [ $argv[1] ]
         wget -t 1 -qO - --method=PUT --body-file="$argv[1]" --header="Content-Type: (file -b --mime-type $argv[1])" https://transfer.sh/(basename $argv[1])
@@ -118,8 +152,11 @@ tls-cert-file | path to tls certificate | |
 tls-private-key | path to tls private key | |
 http-auth-user | user for basic http auth on upload | |
 http-auth-pass | pass for basic http auth on upload | |
+ip-whitelist | comma separated list of ips allowed to connect to the service | |
+ip-blacklist | comma separated list of ips not allowed to connect to the service | |
 temp-path | path to temp folder | system temp |
-web-path | path to static web files (for development) | |
+web-path | path to static web files (for development or custom front end) | |
+proxy-path | path prefix when service is run behind a proxy | |
 ga-key | google analytics key for the front end | |
 uservoice-key | user voice key for the front end  | |
 provider | which storage provider to use | (s3, grdrive or local) |
@@ -140,13 +177,18 @@ If you want to use TLS using your own certificates, set tls-listener to :443, fo
 
 ## Development
 
-Make sure your GOPATH is set correctly.
+Switched to GO111MODULE
 
 ```bash
 go run main.go --provider=local --listener :8080 --temp-path=/tmp/ --basedir=/tmp/
 ```
 
 ## Build
+
+If on go < 1.11
+```bash
+go get -u -v ./...
+```
 
 ```bash
 go build -o transfersh main.go

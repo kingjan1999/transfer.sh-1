@@ -59,7 +59,10 @@ import (
 const SERVER_INFO = "transfer.sh"
 
 // parse request with maximum memory of _24Kilobits
-const _24K = (1 << 10) * 24
+const _24K = (1 << 3) * 24
+
+// parse request with maximum memory of _5Megabytes
+const _5M = (1 << 20) * 5
 
 type OptionFn func(*Server)
 
@@ -115,6 +118,16 @@ func WebPath(s string) OptionFn {
 		}
 
 		srvr.webPath = s
+	}
+}
+
+func ProxyPath(s string) OptionFn {
+	return func(srvr *Server) {
+		if s[len(s)-1:] != "/" {
+			s = s + string(filepath.Separator)
+		}
+
+		srvr.proxyPath = s
 	}
 }
 
@@ -216,6 +229,20 @@ func HttpAuthCredentials(user string, pass string) OptionFn {
 	}
 }
 
+func FilterOptions(options IPFilterOptions) OptionFn {
+	for i, allowedIP := range options.AllowedIPs {
+		options.AllowedIPs[i] = strings.TrimSpace(allowedIP)
+	}
+
+	for i, blockedIP := range options.BlockedIPs {
+		options.BlockedIPs[i] = strings.TrimSpace(blockedIP)
+	}
+
+	return func(srvr *Server) {
+		srvr.ipFilterOptions = &options
+	}
+}
+
 type Server struct {
 	AuthUser string
 	AuthPass string
@@ -234,12 +261,15 @@ type Server struct {
 
 	forceHTTPs bool
 
+	ipFilterOptions *IPFilterOptions
+
 	VirusTotalKey    string
 	ClamAVDaemonHost string
 
 	tempPath string
 
 	webPath      string
+	proxyPath    string
 	gaKey        string
 	userVoiceKey string
 
@@ -317,13 +347,15 @@ func (s *Server) Run() {
 
 	staticHandler := http.FileServer(fs)
 
-	r.PathPrefix("/images/").Handler(staticHandler)
-	r.PathPrefix("/styles/").Handler(staticHandler)
-	r.PathPrefix("/scripts/").Handler(staticHandler)
-	r.PathPrefix("/fonts/").Handler(staticHandler)
-	r.PathPrefix("/ico/").Handler(staticHandler)
-	r.PathPrefix("/favicon.ico").Handler(staticHandler)
-	r.PathPrefix("/robots.txt").Handler(staticHandler)
+	r.PathPrefix("/images/").Handler(staticHandler).Methods("GET")
+	r.PathPrefix("/styles/").Handler(staticHandler).Methods("GET")
+	r.PathPrefix("/scripts/").Handler(staticHandler).Methods("GET")
+	r.PathPrefix("/fonts/").Handler(staticHandler).Methods("GET")
+	r.PathPrefix("/ico/").Handler(staticHandler).Methods("GET")
+	r.HandleFunc("/favicon.ico", staticHandler.ServeHTTP).Methods("GET")
+	r.HandleFunc("/robots.txt", staticHandler.ServeHTTP).Methods("GET")
+
+	r.HandleFunc("/{filename:(?:favicon\\.ico|robots\\.txt|health\\.html)}", s.BasicAuthHandler(http.HandlerFunc(s.putHandler))).Methods("PUT")
 
 	r.HandleFunc("/health.html", healthHandler).Methods("GET")
 	r.HandleFunc("/", s.viewHandler).Methods("GET")
@@ -381,7 +413,17 @@ func (s *Server) Run() {
 
 	s.logger.Printf("Transfer.sh server started.\nusing temp folder: %s\nusing storage provider: %s", s.tempPath, s.storage.Type())
 
-	h := handlers.PanicHandler(handlers.LogHandler(LoveHandler(s.RedirectHandler(r)), handlers.NewLogOptions(s.logger.Printf, "_default_")), nil)
+	h := handlers.PanicHandler(
+		IPFilterHandler(
+			handlers.LogHandler(
+				LoveHandler(
+					s.RedirectHandler(r)),
+				handlers.NewLogOptions(s.logger.Printf, "_default_"),
+			),
+			s.ipFilterOptions,
+		),
+		nil,
+	)
 
 	if !s.TLSListenerOnly {
 		srvr := &http.Server{

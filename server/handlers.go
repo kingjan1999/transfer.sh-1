@@ -35,6 +35,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	blackfriday "gopkg.in/russross/blackfriday.v2"
 	"html"
 	html_template "html/template"
 	"io"
@@ -55,14 +56,15 @@ import (
 
 	"net"
 
+	"encoding/base64"
 	web "github.com/dutchcoders/transfer.sh-web"
 	"github.com/gorilla/mux"
-	"github.com/russross/blackfriday"
-	"github.com/kingjan1999/xkpasswd-go"
-
-	"encoding/base64"
-	qrcode "github.com/skip2/go-qrcode"
+	"github.com/microcosm-cc/bluemonday"
+        "github.com/kingjan1999/xkpasswd-go"
+	"github.com/skip2/go-qrcode"
 )
+
+const getPathPart = "get"
 
 var (
 	htmlTemplates = initHTMLTemplates()
@@ -127,14 +129,15 @@ func (s *Server) previewHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var data []byte
-		if data, err = ioutil.ReadAll(reader); err != nil {
+		data = make([]byte, _5M)
+		if _, err = reader.Read(data); err != io.EOF && err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 		if strings.HasPrefix(contentType, "text/x-markdown") || strings.HasPrefix(contentType, "text/markdown") {
-			escapedData := html.EscapeString(string(data))
-			output := blackfriday.MarkdownCommon([]byte(escapedData))
+			unsafe := blackfriday.Run(data)
+			output := bluemonday.UGCPolicy().SanitizeBytes(unsafe)
 			content = html_template.HTML(output)
 		} else if strings.HasPrefix(contentType, "text/plain") {
 			content = html_template.HTML(fmt.Sprintf("<pre>%s</pre>", html.EscapeString(string(data))))
@@ -146,14 +149,12 @@ func (s *Server) previewHandler(w http.ResponseWriter, r *http.Request) {
 		templatePath = "download.html"
 	}
 
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	resolvedUrl := resolveUrl(r, getURL(r).ResolveReference(r.URL), true)
+	relativeURL, _ := url.Parse(path.Join(s.proxyPath, token, filename))
+	resolvedURL := resolveURL(r, getURL(r).ResolveReference(relativeURL), true)
+	relativeURLGet, _ := url.Parse(path.Join(s.proxyPath, getPathPart, token, filename))
+	resolvedURLGet := resolveURL(r, getURL(r).ResolveReference(relativeURLGet), true)
 	var png []byte
-	png, err = qrcode.Encode(resolvedUrl, qrcode.High, 150)
+	png, err = qrcode.Encode(resolvedURL, qrcode.High, 150)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -162,13 +163,14 @@ func (s *Server) previewHandler(w http.ResponseWriter, r *http.Request) {
 	qrCode := base64.StdEncoding.EncodeToString(png)
 
 	hostname := getURL(r).Host
-	webAddress := resolveWebAddress(r)
+	webAddress := resolveWebAddress(r, s.proxyPath)
 
 	data := struct {
 		ContentType   string
 		Content       html_template.HTML
 		Filename      string
 		Url           string
+		UrlGet        string
 		Hostname      string
 		WebAddress    string
 		ContentLength uint64
@@ -179,7 +181,8 @@ func (s *Server) previewHandler(w http.ResponseWriter, r *http.Request) {
 		contentType,
 		content,
 		filename,
-		resolvedUrl,
+		resolvedURL,
+		resolvedURLGet,
 		hostname,
 		webAddress,
 		contentLength,
@@ -202,7 +205,7 @@ func (s *Server) viewHandler(w http.ResponseWriter, r *http.Request) {
 	// vars := mux.Vars(r)
 
 	hostname := getURL(r).Host
-	webAddress := resolveWebAddress(r)
+	webAddress := resolveWebAddress(r, s.proxyPath)
 
 	data := struct {
 		Hostname     string
@@ -335,7 +338,8 @@ func (s *Server) postHandler(w http.ResponseWriter, r *http.Request) {
 
 			}
 
-			relativeURL, _ := url.Parse(path.Join(token, filename))
+			filename = url.QueryEscape(filename)
+			relativeURL, _ := url.Parse(path.Join(s.proxyPath, token, filename))
 			fmt.Fprintln(w, getURL(r).ResolveReference(relativeURL).String())
 
 			cleanTmpFile(file)
@@ -345,8 +349,15 @@ func (s *Server) postHandler(w http.ResponseWriter, r *http.Request) {
 
 func cleanTmpFile(f *os.File) {
 	if f != nil {
-		f.Close()
-		os.Remove(f.Name())
+		err := f.Close()
+		if err != nil {
+			log.Printf("Error closing tmpfile: %s (%s)", err, f.Name())
+		}
+
+		err = os.Remove(f.Name())
+		if err != nil {
+			log.Printf("Error removing tmpfile: %s (%s)", err, f.Name())
+		}
 	}
 }
 
@@ -487,25 +498,16 @@ func (s *Server) putHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/plain")
 
-	relativeURL, _ := url.Parse(path.Join(token, filename))
-	deleteUrl, _ := url.Parse(path.Join(token, filename, metadata.DeletionToken))
+	filename = url.QueryEscape(filename)
+	relativeURL, _ := url.Parse(path.Join(s.proxyPath, token, filename))
+	deleteURL, _ := url.Parse(path.Join(s.proxyPath, token, filename, metadata.DeletionToken))
 
-	w.Header().Set("X-Url-Delete", resolveUrl(r, deleteUrl, true))
+	w.Header().Set("X-Url-Delete", resolveURL(r, deleteURL, true))
 
-	fmt.Fprint(w, resolveUrl(r, relativeURL, false))
+	fmt.Fprint(w, resolveURL(r, relativeURL, false))
 }
 
-func resolveUrl(r *http.Request, u *url.URL, absolutePath bool) string {
-	if u.RawQuery != "" {
-		u.Path = fmt.Sprintf("%s?%s", u.Path, url.QueryEscape(u.RawQuery))
-		u.RawQuery = ""
-	}
-
-	if u.Fragment != "" {
-		u.Path = fmt.Sprintf("%s#%s", u.Path, u.Fragment)
-		u.Fragment = ""
-	}
-
+func resolveURL(r *http.Request, u *url.URL, absolutePath bool) string {
 	if absolutePath {
 		r.URL.Path = ""
 	}
@@ -513,10 +515,37 @@ func resolveUrl(r *http.Request, u *url.URL, absolutePath bool) string {
 	return getURL(r).ResolveReference(u).String()
 }
 
-func resolveWebAddress(r *http.Request) string {
+func resolveKey(key, proxyPath string) string {
+	if strings.HasPrefix(key, "/") {
+		key = key[1:]
+	}
+
+	if strings.HasPrefix(key, proxyPath) {
+		key = key[len(proxyPath):]
+	}
+
+	key = strings.Replace(key, "\\", "/", -1)
+
+	return key
+}
+
+func resolveWebAddress(r *http.Request, proxyPath string) string {
 	url := getURL(r)
 
-	return fmt.Sprintf("%s://%s", url.ResolveReference(url).Scheme, url.ResolveReference(url).Host)
+	var webAddress string
+
+	if len(proxyPath) == 0 {
+		webAddress = fmt.Sprintf("%s://%s/",
+			url.ResolveReference(url).Scheme,
+			url.ResolveReference(url).Host)
+	} else {
+		webAddress = fmt.Sprintf("%s://%s/%s",
+			url.ResolveReference(url).Scheme,
+			url.ResolveReference(url).Host,
+			proxyPath)
+	}
+
+	return webAddress
 }
 
 func getURL(r *http.Request) *url.URL {
@@ -665,11 +694,7 @@ func (s *Server) zipHandler(w http.ResponseWriter, r *http.Request) {
 	zw := zip.NewWriter(w)
 
 	for _, key := range strings.Split(files, ",") {
-		if strings.HasPrefix(key, "/") {
-			key = key[1:]
-		}
-
-		key = strings.Replace(key, "\\", "/", -1)
+		key = resolveKey(key, s.proxyPath)
 
 		token := strings.Split(key, "/")[0]
 		filename := sanitize(strings.Split(key, "/")[1])
@@ -741,11 +766,7 @@ func (s *Server) tarGzHandler(w http.ResponseWriter, r *http.Request) {
 	defer zw.Close()
 
 	for _, key := range strings.Split(files, ",") {
-		if strings.HasPrefix(key, "/") {
-			key = key[1:]
-		}
-
-		key = strings.Replace(key, "\\", "/", -1)
+		key = resolveKey(key, s.proxyPath)
 
 		token := strings.Split(key, "/")[0]
 		filename := sanitize(strings.Split(key, "/")[1])
@@ -804,6 +825,8 @@ func (s *Server) tarHandler(w http.ResponseWriter, r *http.Request) {
 	defer zw.Close()
 
 	for _, key := range strings.Split(files, ",") {
+		key = resolveKey(key, s.proxyPath)
+
 		token := strings.Split(key, "/")[0]
 		filename := strings.Split(key, "/")[1]
 
@@ -911,6 +934,16 @@ func (s *Server) getHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", fmt.Sprintf("%s; filename=\"%s\"", disposition, filename))
 	w.Header().Set("Connection", "keep-alive")
 
+	if w.Header().Get("Range") == "" {
+		if _, err = io.Copy(w, reader); err != nil {
+			log.Printf("%s", err.Error())
+			http.Error(w, "Error occurred copying to output stream", 500)
+			return
+		}
+
+		return
+	}
+
 	file, err := ioutil.TempFile(s.tempPath, "range-")
 	if err != nil {
 		log.Printf("%s", err.Error())
@@ -921,11 +954,18 @@ func (s *Server) getHandler(w http.ResponseWriter, r *http.Request) {
 	defer cleanTmpFile(file)
 
 	tee := io.TeeReader(reader, file)
-	_, err = ioutil.ReadAll(tee)
-	if err != nil {
-		log.Printf("%s", err.Error())
-		http.Error(w, "Error occurred copying to output stream", 500)
-		return
+	for {
+		b := make([]byte, _5M)
+		_, err = tee.Read(b)
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			log.Printf("%s", err.Error())
+			http.Error(w, "Error occurred copying to output stream", 500)
+			return
+		}
 	}
 
 	http.ServeContent(w, r, filename, time.Now(), file)
@@ -960,6 +1000,17 @@ func LoveHandler(h http.Handler) http.HandlerFunc {
 		w.Header().Set("x-served-by", "Proudly served by DutchCoders")
 		w.Header().Set("Server", "Transfer.sh HTTP Server 1.0")
 		h.ServeHTTP(w, r)
+	}
+}
+
+func IPFilterHandler(h http.Handler, ipFilterOptions *IPFilterOptions) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if ipFilterOptions == nil {
+			h.ServeHTTP(w, r)
+		} else {
+			WrapIPFilter(h, *ipFilterOptions).ServeHTTP(w, r)
+		}
+		return
 	}
 }
 
