@@ -15,6 +15,8 @@ require (
 	github.com/golang/gddo v0.0.0-20190419222130-af0f2af80721
 	github.com/gorilla/mux v1.7.1
 	github.com/gorilla/securecookie v1.1.1 // indirect
+	github.com/kingjan1999/transfer.sh-1 v1.0.0
+	github.com/kingjan1999/xkpasswd-go v0.0.0-20171109195949-8e190f610052
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.1 // indirect
 	github.com/mattn/go-isatty v0.0.7 // indirect
@@ -24,6 +26,7 @@ require (
 	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
 	github.com/skip2/go-qrcode v0.0.0-20190110000554-dc11ecdae0a9
 	github.com/tomasen/realip v0.0.0-20180522021738-f0c99a92ddce
+	github.com/urfave/cli v1.20.0 // indirect
 	github.com/vaughan0/go-ini v0.0.0-20130923145212-a98ad7ee00ec // indirect
 	golang.org/x/crypto v0.0.0-20190510104115-cbcb75029529
 	golang.org/x/net v0.0.0-20190509222800-a4d6f7feada5

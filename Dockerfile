@@ -5,7 +5,15 @@ LABEL maintainer="Andrea Spacca <andrea.spacca@gmail.com>"
 ADD . /go/src/github.com/kingjan1999/transfer.sh-1
 ADD ./xkpasswd-words.txt /data/woerter.txt
 
+RUN export GO111MODULE=on
+
 # build & install server
+WORKDIR /go/src/github.com/kingjan1999/transfer.sh-1
+RUN go get -d -v ./...
+
+# Install the package
+#RUN go install -v ./...
+
 RUN go build -o /go/bin/transfersh github.com/kingjan1999/transfer.sh-1
 
 FROM golang:1.11-alpine
