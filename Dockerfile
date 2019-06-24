@@ -1,30 +1,30 @@
-FROM golang:1.12-alpine as build
-LABEL maintainer="Andrea Spacca <andrea.spacca@gmail.com>"
+# Default to Go 1.12
+ARG GO_VERSION=1.12
+FROM golang:${GO_VERSION}-alpine as build
+
+# Necessary to run 'go get' and to compile the linked binary
+RUN apk add git musl-dev
 
 # Copy the local package files to the container's workspace.
 ADD . /go/src/github.com/kingjan1999/transfer.sh-1
 ADD ./xkpasswd-words.txt /data/woerter.txt
+WORKDIR /go/src/github.com/dutchcoders/transfer.sh
 
-RUN export GO111MODULE=on
+ENV GO111MODULE=on
 
 # build & install server
-WORKDIR /go/src/github.com/kingjan1999/transfer.sh-1
-RUN go get -d -v ./...
+RUN go get -u ./... && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags -a -tags netgo -ldflags '-w -extldflags "-static"' -o /go/bin/transfersh github.com/kingjan1999/transfer.sh-1
 
-# Install the package
-#RUN go install -v ./...
+FROM scratch AS final
+LABEL maintainer="Andrea Spacca <andrea.spacca@gmail.com>"
 
-RUN go build -o /go/bin/transfersh github.com/kingjan1999/transfer.sh-1
-
-FROM golang:1.11-alpine
-COPY --from=build /go/bin/transfersh /go/bin/transfersh
-COPY --from=build /data/woerter.txt /data/woerter.txt
+COPY --from=build  /go/bin/transfersh /go/bin/transfersh
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 ENV PROVIDER local
 ENV BASEDIR /data/
 ENV WORDS_PATH /data/woerter.txt
 
-ENTRYPOINT /go/bin/transfersh --listener :8080 --provider $PROVIDER --basedir $BASEDIR
-#ENTRYPOINT ["/go/bin/transfersh", "--listener", ":8080"]
+ENTRYPOINT ["/go/bin/transfersh", "--listener", ":8080"]
 
 EXPOSE 8080
