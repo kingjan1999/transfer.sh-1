@@ -1,4 +1,4 @@
-module github.com/kingjan1999/transfer.sh
+module github.com/kingjan1999/transfer.sh-1
 
 go 1.15
 
