@@ -103,6 +103,14 @@ func (s *Server) previewHandler(w http.ResponseWriter, r *http.Request) {
 	token := vars["token"]
 	filename := vars["filename"]
 
+	_, err := s.CheckMetadata(token, filename, false)
+
+	if err != nil {
+		log.Printf("Error metadata: %s", err.Error())
+		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		return
+	}
+
 	contentType, contentLength, err := s.storage.Head(token, filename)
 	if err != nil {
 		http.Error(w, http.StatusText(404), 404)
@@ -150,9 +158,9 @@ func (s *Server) previewHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	relativeURL, _ := url.Parse(path.Join(s.proxyPath, token, filename))
-	resolvedURL := resolveURL(r, getURL(r).ResolveReference(relativeURL), true)
+	resolvedURL := resolveURL(r, relativeURL)
 	relativeURLGet, _ := url.Parse(path.Join(s.proxyPath, getPathPart, token, filename))
-	resolvedURLGet := resolveURL(r, getURL(r).ResolveReference(relativeURLGet), true)
+	resolvedURLGet := resolveURL(r, relativeURLGet)
 	var png []byte
 	png, err = qrcode.Encode(resolvedURL, qrcode.High, 150)
 	if err != nil {
@@ -379,9 +387,9 @@ type Metadata struct {
 func MetadataForRequest(contentType string, r *http.Request) Metadata {
 	metadata := Metadata{
 		ContentType:   contentType,
-		MaxDate:       time.Now().Add(time.Hour * 24 * 365 * 10),
+		MaxDate:       time.Time{},
 		Downloads:     0,
-		MaxDownloads:  99999999,
+		MaxDownloads:  -1,
 		DeletionToken: Encode(10000000+int64(rand.Intn(1000000000))) + Encode(10000000+int64(rand.Intn(1000000000))),
 	}
 
@@ -502,15 +510,13 @@ func (s *Server) putHandler(w http.ResponseWriter, r *http.Request) {
 	relativeURL, _ := url.Parse(path.Join(s.proxyPath, token, filename))
 	deleteURL, _ := url.Parse(path.Join(s.proxyPath, token, filename, metadata.DeletionToken))
 
-	w.Header().Set("X-Url-Delete", resolveURL(r, deleteURL, true))
+	w.Header().Set("X-Url-Delete", resolveURL(r, deleteURL))
 
-	fmt.Fprint(w, resolveURL(r, relativeURL, false))
+	fmt.Fprint(w, resolveURL(r, relativeURL))
 }
 
-func resolveURL(r *http.Request, u *url.URL, absolutePath bool) string {
-	if absolutePath {
-		r.URL.Path = ""
-	}
+func resolveURL(r *http.Request, u *url.URL) string {
+	r.URL.Path = ""
 
 	return getURL(r).ResolveReference(u).String()
 }
@@ -575,10 +581,19 @@ func getURL(r *http.Request) *url.URL {
 	return u
 }
 
-func calcRemainingLimits(metadata Metadata) (int, int) {
-	remainingDownloads := metadata.MaxDownloads - metadata.Downloads
-	timeDifference := metadata.MaxDate.Sub(time.Now())
-	remainingDays := int(timeDifference.Hours()/24) + 1
+func (metadata Metadata) remainingLimitHeaderValues() (remainingDownloads, remainingDays string) {
+	if metadata.MaxDate.IsZero() {
+		remainingDays = "n/a"
+	} else {
+		timeDifference := metadata.MaxDate.Sub(time.Now())
+		remainingDays = strconv.Itoa(int(timeDifference.Hours()/24) + 1)
+	}
+
+	if metadata.MaxDownloads == -1 {
+		remainingDownloads = "n/a"
+	} else {
+		remainingDownloads = strconv.Itoa(metadata.MaxDownloads - metadata.Downloads)
+	}
 
 	return remainingDownloads, remainingDays
 }
@@ -619,9 +634,9 @@ func (s *Server) CheckMetadata(token, filename string, increaseDownload bool) (M
 
 	if err := json.NewDecoder(r).Decode(&metadata); err != nil {
 		return metadata, err
-	} else if metadata.Downloads >= metadata.MaxDownloads {
+	} else if metadata.MaxDownloads != -1 && metadata.Downloads >= metadata.MaxDownloads {
 		return metadata, errors.New("MaxDownloads expired.")
-	} else if time.Now().After(metadata.MaxDate) {
+	} else if !metadata.MaxDate.IsZero() && time.Now().After(metadata.MaxDate) {
 		return metadata, errors.New("MaxDate expired.")
 	} else {
 		// todo(nl5887): mutex?
@@ -903,13 +918,13 @@ func (s *Server) headHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	remainingDownloads, remainingDays := calcRemainingLimits(metadata)
+	remainingDownloads, remainingDays := metadata.remainingLimitHeaderValues()
 
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Content-Length", strconv.FormatUint(contentLength, 10))
 	w.Header().Set("Connection", "close")
-	w.Header().Set("X-Remaining-Downloads", strconv.Itoa(remainingDownloads))
-	w.Header().Set("X-Remaining-Days", strconv.Itoa(remainingDays))
+	w.Header().Set("X-Remaining-Downloads", remainingDownloads)
+	w.Header().Set("X-Remaining-Days", remainingDays)
 }
 
 func (s *Server) getHandler(w http.ResponseWriter, r *http.Request) {
@@ -947,14 +962,14 @@ func (s *Server) getHandler(w http.ResponseWriter, r *http.Request) {
 		disposition = "attachment"
 	}
 
-	remainingDownloads, remainingDays := calcRemainingLimits(metadata)
+	remainingDownloads, remainingDays := metadata.remainingLimitHeaderValues()
 
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Content-Length", strconv.FormatUint(contentLength, 10))
 	w.Header().Set("Content-Disposition", fmt.Sprintf("%s; filename=\"%s\"", disposition, filename))
 	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Remaining-Downloads", strconv.Itoa(remainingDownloads))
-	w.Header().Set("X-Remaining-Days", strconv.Itoa(remainingDays))
+	w.Header().Set("X-Remaining-Downloads", remainingDownloads)
+	w.Header().Set("X-Remaining-Days", remainingDays)
 
 	if w.Header().Get("Range") == "" {
 		if _, err = io.Copy(w, reader); err != nil {
