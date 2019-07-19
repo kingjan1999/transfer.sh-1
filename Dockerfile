@@ -35,6 +35,7 @@ COPY --from=build /tmp/empty /tmp
 COPY --from=build /tmp/useradd/* /etc/
 COPY --from=build --chown=${RUNAS}  /go/bin/transfersh /go/bin/transfersh
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=build /data/woerter.txt /data/woerter.txt
 
 USER ${RUNAS}
 
