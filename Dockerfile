@@ -8,7 +8,7 @@ RUN apk add git musl-dev
 # Copy the local package files to the container's workspace.
 ADD . /go/src/github.com/kingjan1999/transfer.sh-1
 ADD ./xkpasswd-words.txt /data/woerter.txt
-WORKDIR /go/src/github.com/dutchcoders/transfer.sh
+WORKDIR /go/src/github.com/kingjan1999/transfer.sh-1
 
 ENV GO111MODULE=on
 
