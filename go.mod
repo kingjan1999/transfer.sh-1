@@ -1,4 +1,4 @@
-module github.com/dutchcoders/transfer.sh
+module github.com/kingjan1999/transfer.sh
 
 go 1.12
 
@@ -17,7 +17,6 @@ require (
 	github.com/golang/gddo v0.0.0-20190419222130-af0f2af80721
 	github.com/gorilla/mux v1.7.3
 	github.com/gorilla/securecookie v1.1.1 // indirect
-	github.com/kingjan1999/transfer.sh-1 v1.0.0
 	github.com/kingjan1999/xkpasswd-go v0.0.0-20171109195949-8e190f610052
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/kr/pty v1.1.8 // indirect
