@@ -5,16 +5,15 @@ FROM golang:${GO_VERSION}-alpine as build
 # Necessary to run 'go get' and to compile the linked binary
 RUN apk add git musl-dev
 
-ADD . /go/src/github.com/dutchcoders/transfer.sh
+ADD ./xkpasswd-words.txt /data/woerter.txt
+ADD . /go/src/github.com/kingjan1999/transfer.sh-1
 
-WORKDIR /go/src/github.com/dutchcoders/transfer.sh
+WORKDIR /go/src/github.com/kingjan1999/transfer.sh-1
 
 ENV GO111MODULE=on
 
-RUN export GO111MODULE=on
-
 # build & install server
-RUN CGO_ENABLED=0 go build -tags netgo -ldflags "-X github.com/dutchcoders/transfer.sh/cmd.Version=$(git describe --tags) -a -s -w -extldflags '-static'" -o /go/bin/transfersh
+RUN CGO_ENABLED=0 go build -tags netgo -ldflags "-X github.com/kingjan1999/transfer.sh-1/cmd.Version=$(git describe --tags) -a -s -w -extldflags '-static'" -o /go/bin/transfersh
 
 ARG PUID=5000 \
     PGID=5000 \
@@ -43,7 +42,6 @@ ENV PROVIDER local
 ENV BASEDIR /data/
 ENV WORDS_PATH /data/woerter.txt
 
-ENTRYPOINT /go/bin/transfersh --listener :8080 --provider $PROVIDER --basedir $BASEDIR
-#ENTRYPOINT ["/go/bin/transfersh", "--listener", ":8080"]
+ENTRYPOINT ["/go/bin/transfersh", "--listener", ":8080"]
 
 EXPOSE 8080

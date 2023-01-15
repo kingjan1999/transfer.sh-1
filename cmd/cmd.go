@@ -2,13 +2,13 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/dutchcoders/transfer.sh/server/storage"
+	"github.com/kingjan1999/transfer.sh-1/server/storage"
 	"log"
 	"os"
 	"strings"
 
-	"github.com/kingjan1999/transfer.sh-1/server"
 	"github.com/fatih/color"
+	"github.com/kingjan1999/transfer.sh-1/server"
 	"github.com/urfave/cli"
 	"google.golang.org/api/googleapi"
 )

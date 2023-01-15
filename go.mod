@@ -18,6 +18,7 @@ require (
 	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/securecookie v1.1.1 // indirect
+	github.com/kingjan1999/xkpasswd-go v0.0.0-20171109195949-8e190f610052
 	github.com/microcosm-cc/bluemonday v1.0.16
 	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d // indirect
 	github.com/russross/blackfriday/v2 v2.1.0
@@ -26,7 +27,7 @@ require (
 	github.com/urfave/cli v1.22.5
 	go.opencensus.io v0.22.6 // indirect
 	golang.org/x/crypto v0.0.0-20220131195533-30dcbda58838
-	golang.org/x/net v0.0.0-20220513224357-95641704303c // indirect
+	golang.org/x/net v0.0.0-20220513224357-95641704303c
 	golang.org/x/oauth2 v0.0.0-20210218202405-ba52d332ba99
 	google.golang.org/api v0.40.0
 	google.golang.org/genproto v0.0.0-20210218151259-fe80b386bf06 // indirect

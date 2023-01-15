@@ -36,7 +36,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/dutchcoders/transfer.sh/server/storage"
+	"github.com/kingjan1999/transfer.sh-1/server/storage"
 	"html"
 	htmlTemplate "html/template"
 	"io"
@@ -57,8 +57,8 @@ import (
 	web "github.com/dutchcoders/transfer.sh-web"
 	"github.com/gorilla/mux"
 	"github.com/microcosm-cc/bluemonday"
-	"github.com/russross/blackfriday/v2"
-	"github.com/skip2/go-qrcode"
+        "github.com/russross/blackfriday/v2"
+        "github.com/skip2/go-qrcode"
 	"golang.org/x/net/idna"
 )
 
@@ -288,14 +288,6 @@ func (s *Server) notFoundHandler(w http.ResponseWriter, _ *http.Request) {
 
 func sanitize(fileName string) string {
 	return path.Base(fileName)
-}
-
-func getWordsPath() string {
-	value := os.Getenv("WORDS_PATH")
-	if len(value) == 0 {
-		return "xkpasswd-words.txt"
-	}
-	return value
 }
 
 func (s *Server) postHandler(w http.ResponseWriter, r *http.Request) {
@@ -1043,12 +1035,12 @@ func (s *Server) getHandler(w http.ResponseWriter, r *http.Request) {
 	if action == "inline" {
 		disposition = "inline"
 		/*
-		metadata.ContentType is unable to determine the type of the content, 
-		So add text/plain in this case to fix XSS related issues/
+			metadata.ContentType is unable to determine the type of the content,
+			So add text/plain in this case to fix XSS related issues/
 		*/
 		if strings.TrimSpace(contentType) == "" {
-		      contentType = "text/plain"
-		 }
+			contentType = "text/plain"
+		}
 	} else {
 		disposition = "attachment"
 	}

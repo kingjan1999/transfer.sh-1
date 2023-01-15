@@ -52,8 +52,8 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 
 	web "github.com/dutchcoders/transfer.sh-web"
-	"github.com/dutchcoders/transfer.sh/server/storage"
 	assetfs "github.com/elazarl/go-bindata-assetfs"
+	"github.com/kingjan1999/transfer.sh-1/server/storage"
 )
 
 // parse request with maximum memory of _24Kilobits

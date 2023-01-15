@@ -25,7 +25,10 @@ THE SOFTWARE.
 package server
 
 import (
+	"github.com/kingjan1999/xkpasswd-go"
 	"math/rand"
+	"os"
+	"strings"
 )
 
 const (
@@ -33,8 +36,13 @@ const (
 	SYMBOLS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 )
 
-// generate a token
 func token(length int) string {
+	result := strings.ToLower(xkpasswd.GeneratePassword("wsw", "-", getWordsPath()))
+	return result
+}
+
+// generate a token
+func token_old(length int) string {
 	result := ""
 	for i := 0; i < length; i++ {
 		x := rand.Intn(len(SYMBOLS) - 1)
@@ -42,4 +50,12 @@ func token(length int) string {
 	}
 
 	return result
+}
+
+func getWordsPath() string {
+	value := os.Getenv("WORDS_PATH")
+	if len(value) == 0 {
+		return "xkpasswd-words.txt"
+	}
+	return value
 }
