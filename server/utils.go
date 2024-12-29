@@ -32,6 +32,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/golang/gddo/httputil/header"
 )
@@ -234,8 +235,10 @@ func formatSize(size int64) string {
 	return fmt.Sprintf("%s %s", strconv.FormatFloat(newVal, 'f', -1, 64), getSuffix)
 }
 
-func CloseCheck(f func() error) {
-	if err := f(); err != nil {
-		fmt.Println("Received close error:", err)
+func formatDurationDays(durationDays time.Duration) string {
+	days := int(durationDays.Hours() / 24)
+	if days == 1 {
+		return fmt.Sprintf("%d day", days)
 	}
+	return fmt.Sprintf("%d days", days)
 }

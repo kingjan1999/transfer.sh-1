@@ -6,6 +6,7 @@
 * [Encrypting and decrypting](#encrypting-and-decrypting)
 * [Scanning for viruses](#scanning-for-viruses)
 * [Uploading and copy download command](#uploading-and-copy-download-command)
+* [Uploading and displaying URL and deletion token](#uploading-and-displaying-url-and-deletion-token)
 
 ## Aliases
 <a name="aliases"/>
@@ -147,12 +148,12 @@ $ transfer /tmp/hello.txt | mail -s "Hello World" user@yourmaildomain.com
 
 ### Encrypting files with password using gpg
 ```bash
-$ cat /tmp/hello.txt | gpg -ac -o- | curl -X PUT --upload-file "-" https://transfer.sh/test.txt
+$ gpg --armor --symmetric --output - /tmp/hello.txt | curl --upload-file - https://transfer.sh/test.txt
 ```
 
 ### Downloading and decrypting
 ```bash
-$ curl https://transfer.sh/1lDau/test.txt | gpg -o- > /tmp/hello.txt 
+$ curl https://transfer.sh/1lDau/test.txt | gpg --decrypt --output /tmp/hello.txt
 ```
 
 ### Import keys from [keybase](https://keybase.io/)
@@ -175,6 +176,58 @@ $ curl -X PUT --upload-file ./eicar.com https://transfer.sh/eicar.com/scan
 ```bash
 $ curl -X PUT --upload-file nhgbhhj https://transfer.sh/test.txt/virustotal 
 ```
+
+### Upload encrypted password protected files
+
+By default files upload for only 1 download, you can specify download limit using -D flag like `transfer-encrypted -D 50 %file/folder%`
+
+#### One line for bashrc
+```bash
+transfer-encrypted() { if [ $# -eq 0 ]; then echo "No arguments specified.\nUsage:\n transfer <file|directory>\n ... | transfer <file_name>" >&2; return 1; fi; while getopts ":D:" opt; do case $opt in D) max_downloads=$OPTARG;; \?) echo "Invalid option: -$OPTARG" >&2;; esac; done; shift "$((OPTIND - 1))"; file="$1"; file_name=$(basename "$file"); if [ ! -e "$file" ]; then echo "$file: No such file or directory" >&2; return 1; fi; if [ -d "$file" ]; then file_name="$file_name.zip"; (cd "$file" && zip -r -q - .) | openssl aes-256-cbc -pbkdf2 -e > "tmp-$file_name" && cat "tmp-$file_name" | curl -H "Max-Downloads: $max_downloads" -w '\n' --upload-file "tmp-$file_name" "https://transfer.sh/$file_name" | tee /dev/null; rm "tmp-$file_name"; else cat "$file" | openssl aes-256-cbc -pbkdf2 -e > "tmp-$file" && cat "tmp-$file" | curl -H "Max-Downloads: $max_downloads" -w '\n' --upload-file - "https://transfer.sh/$file_name" | tee /dev/null; rm "tmp-$file"; fi; }
+```
+#### Human readable code 
+```bash
+transfer-encrypted() {
+    if [ $# -eq 0 ]; then
+        echo "No arguments specified.\nUsage:\n transfer <file|directory>\n ... | transfer <file_name>" >&2
+        return 1
+    fi
+
+    while getopts ":D:" opt; do
+        case $opt in
+            D)
+                max_downloads=$OPTARG
+                ;;
+            \?)
+                echo "Invalid option: -$OPTARG" >&2
+                ;;
+        esac
+    done
+
+    shift "$((OPTIND - 1))"
+    file="$1"
+    file_name=$(basename "$file")
+
+    if [ ! -e "$file" ]; then
+        echo "$file: No such file or directory" >&2
+        return 1
+    fi
+
+    if [ -d "$file" ]; then
+        file_name="$file_name.zip"
+        (cd "$file" && zip -r -q - .) | openssl aes-256-cbc -pbkdf2 -e > "tmp-$file_name" && cat "tmp-$file_name" | curl -H "Max-Downloads: $max_downloads" -w '\n' --upload-file "tmp-$file_name" "https://transfer.sh/$file_name" | tee /dev/null
+        rm "tmp-$file_name"
+    else
+        cat "$file" | openssl aes-256-cbc -pbkdf2 -e > "tmp-$file" && cat "tmp-$file" | curl -H "Max-Downloads: $max_downloads" -w '\n' --upload-file - "https://transfer.sh/$file_name" | tee /dev/null
+        rm "tmp-$file"
+    fi
+}
+```
+#### Decrypt using
+```bash
+curl -s https://transfer.sh/some/file | openssl aes-256-cbc -pbkdf2 -d > output_filename
+```
+
 ## Uploading and copy download command
 
 Download commands can be automatically copied to the clipboard after files are uploaded using transfer.sh.
@@ -259,5 +312,34 @@ https://transfer.sh/y0qr2c/a.log
 wget https://transfer.sh/y0qr2c/a.log
 
 3) Windows download command:
-Invoke-WebRequest -Uri https://transfer.sh/y0qr2c/a.log -OutFile a.log 
+Invoke-WebRequest -Uri https://transfer.sh/y0qr2c/a.log -OutFile a.log
+```
+## Uploading and displaying URL and deletion token
+```bash
+# tempfile
+URLFILE=$HOME/temp/transfersh.url
+# insert number of downloads and days saved
+if [ -f $1 ]; then
+read -p "Allowed number of downloads: " num_down
+read -p "Number of days on server: " num_save
+# transfer
+curl -sD - -H "Max-Downloads: $num_down" -H "Max-Days: $num_save"--progress-bar --upload-file $1 https://transfer.sh/$(basename $1) | grep -i -E 'transfer\.sh|x-url-delete' &> $URLFILE
+# display URL and deletion token
+if [ -f $URLFILE ]; then
+URL=$(tail -n1 $URLFILE)
+TOKEN=$(grep delete $URLFILE | awk -F "/" '{print $NF}')
+echo "*********************************"
+echo "Data is saved in $URLFILE"
+echo "**********************************"
+echo "URL is: $URL"
+echo "Deletion Token is: $TOKEN"
+echo "**********************************"
+else
+echo "NO URL-File found !!"
+fi
+else
+echo "!!!!!!"
+echo "\"$1\" not found !!"
+echo "!!!!!!"
+fi
 ```

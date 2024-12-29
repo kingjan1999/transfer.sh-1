@@ -26,7 +26,6 @@ package server
 
 import (
 	"github.com/kingjan1999/xkpasswd-go"
-	"math/rand"
 	"os"
 	"strings"
 )
@@ -45,7 +44,7 @@ func token(length int) string {
 func token_old(length int) string {
 	result := ""
 	for i := 0; i < length; i++ {
-		x := rand.Intn(len(SYMBOLS) - 1)
+		x := theRand.Intn(len(SYMBOLS) - 1)
 		result = string(SYMBOLS[x]) + result
 	}
 

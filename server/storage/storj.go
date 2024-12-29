@@ -22,13 +22,11 @@ type StorjStorage struct {
 }
 
 // NewStorjStorage is the factory for StorjStorage
-func NewStorjStorage(access, bucket string, purgeDays int, logger *log.Logger) (*StorjStorage, error) {
+func NewStorjStorage(ctx context.Context, access, bucket string, purgeDays int, logger *log.Logger) (*StorjStorage, error) {
 	var instance StorjStorage
 	var err error
 
-	pCtx := context.TODO()
-
-	ctx := fpath.WithTempData(pCtx, "", true)
+	ctx = fpath.WithTempData(ctx, "", true)
 
 	uplConf := &uplink.Config{
 		UserAgent: "transfer-sh",
@@ -78,19 +76,31 @@ func (s *StorjStorage) Head(ctx context.Context, token string, filename string) 
 }
 
 // Get retrieves a file from storage
-func (s *StorjStorage) Get(ctx context.Context, token string, filename string) (reader io.ReadCloser, contentLength uint64, err error) {
+func (s *StorjStorage) Get(ctx context.Context, token string, filename string, rng *Range) (reader io.ReadCloser, contentLength uint64, err error) {
 	key := storj.JoinPaths(token, filename)
 
 	s.logger.Printf("Getting file %s from Storj Bucket", filename)
 
-	options := uplink.DownloadOptions{}
+	var options *uplink.DownloadOptions
+	if rng != nil {
+		options = new(uplink.DownloadOptions)
+		options.Offset = int64(rng.Start)
+		if rng.Limit > 0 {
+			options.Length = int64(rng.Limit)
+		} else {
+			options.Length = -1
+		}
+	}
 
-	download, err := s.project.DownloadObject(fpath.WithTempData(ctx, "", true), s.bucket.Name, key, &options)
+	download, err := s.project.DownloadObject(fpath.WithTempData(ctx, "", true), s.bucket.Name, key, options)
 	if err != nil {
 		return nil, 0, err
 	}
 
 	contentLength = uint64(download.Info().System.ContentLength)
+	if rng != nil {
+		contentLength = rng.AcceptLength(contentLength)
+	}
 
 	reader = download
 	return
@@ -145,6 +155,8 @@ func (s *StorjStorage) Put(ctx context.Context, token string, filename string, r
 	err = writer.Commit()
 	return err
 }
+
+func (s *StorjStorage) IsRangeSupported() bool { return true }
 
 // IsNotExist indicates if a file doesn't exist on storage
 func (s *StorjStorage) IsNotExist(err error) bool {

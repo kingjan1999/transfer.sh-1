@@ -13,29 +13,45 @@ jobs:
       fail-fast: false
       matrix:
         go_version:
-          - 1.15.x
-          - 1.16.x
-          - 1.17.x
-          - 1.18.X
+          - '1.21'
+          - '1.22'
+          - '1.23'
+          - tip
     name: Test with ${{ matrix.go_version }}
     steps:
       - uses: actions/checkout@v2
-      - uses: actions/setup-go@v1
+      - name: Install Go ${{ matrix.go_version }}
+        if: ${{ matrix.go_version != 'tip' }}
+        uses: actions/setup-go@master
         with:
           go-version: ${{ matrix.go_version }}
-      - name: Vet and test
+          check-latest: true
+      - name: Install Go ${{ matrix.go_version }}
+        if: ${{ matrix.go_version == 'tip' }}
+        run: |
+          go install golang.org/dl/gotip@latest
+          `go env GOPATH`/bin/gotip download
+      - name: Vet and test no tip
+        if: ${{ matrix.go_version != 'tip' }}
         run: |
           go version
           go vet ./...
           go test ./...
+      - name: Vet and test gotip
+        if: ${{ matrix.go_version == 'tip' }}
+        run: |
+          `go env GOPATH`/bin/gotip version
+          `go env GOPATH`/bin/gotip vet ./...
+          `go env GOPATH`/bin/gotip test ./...
   golangci:
     name: Linting
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: actions/setup-go@v1
+      - uses: actions/setup-go@master
         with:
-          go-version: 1.18
+          go-version: '1.23'
+          check-latest: true
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v2
         with:

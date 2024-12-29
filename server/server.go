@@ -49,6 +49,7 @@ import (
 	"github.com/VojtechVitek/ratelimit/memory"
 	gorillaHandlers "github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	"github.com/tg123/go-htpasswd"
 	"golang.org/x/crypto/acme/autocert"
 
 	web "github.com/dutchcoders/transfer.sh-web"
@@ -273,9 +274,8 @@ func UseLetsEncrypt(hosts []string) OptionFn {
 			},
 		}
 
-		srvr.tlsConfig = &tls.Config{
-			GetCertificate: m.GetCertificate,
-		}
+		srvr.tlsConfig = m.TLSConfig()
+		srvr.tlsConfig.GetCertificate = m.GetCertificate
 	}
 }
 
@@ -294,8 +294,26 @@ func TLSConfig(cert, pk string) OptionFn {
 // HTTPAuthCredentials sets basic http auth credentials
 func HTTPAuthCredentials(user string, pass string) OptionFn {
 	return func(srvr *Server) {
-		srvr.AuthUser = user
-		srvr.AuthPass = pass
+		srvr.authUser = user
+		srvr.authPass = pass
+	}
+}
+
+// HTTPAuthHtpasswd sets basic http auth htpasswd file
+func HTTPAuthHtpasswd(htpasswdPath string) OptionFn {
+	return func(srvr *Server) {
+		srvr.authHtpasswd = htpasswdPath
+	}
+}
+
+// HTTPAUTHFilterOptions sets basic http auth ips whitelist
+func HTTPAUTHFilterOptions(options IPFilterOptions) OptionFn {
+	for i, allowedIP := range options.AllowedIPs {
+		options.AllowedIPs[i] = strings.TrimSpace(allowedIP)
+	}
+
+	return func(srvr *Server) {
+		srvr.authIPFilterOptions = &options
 	}
 }
 
@@ -316,8 +334,13 @@ func FilterOptions(options IPFilterOptions) OptionFn {
 
 // Server is the main application
 type Server struct {
-	AuthUser string
-	AuthPass string
+	authUser            string
+	authPass            string
+	authHtpasswd        string
+	authIPFilterOptions *IPFilterOptions
+
+	htpasswdFile *htpasswd.File
+	authIPFilter *ipFilter
 
 	logger *log.Logger
 
@@ -379,12 +402,15 @@ func New(options ...OptionFn) (*Server, error) {
 	return s, nil
 }
 
+var theRand *rand.Rand
+
 func init() {
 	var seedBytes [8]byte
 	if _, err := cryptoRand.Read(seedBytes[:]); err != nil {
 		panic("cannot obtain cryptographically secure seed")
 	}
-	rand.Seed(int64(binary.LittleEndian.Uint64(seedBytes[:])))
+
+	theRand = rand.New(rand.NewSource(int64(binary.LittleEndian.Uint64(seedBytes[:]))))
 }
 
 // Run starts Server
@@ -466,8 +492,6 @@ func (s *Server) Run() {
 	r.HandleFunc("/{action:(?:download|get|inline)}/{token}/{filename}", s.headHandler).Methods("HEAD")
 
 	r.HandleFunc("/{token}/{filename}", s.previewHandler).MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) (match bool) {
-		match = false
-
 		// The file will show a preview page when opening the link in browser directly or
 		// from external link. If the referer url path and current path are the same it will be
 		// downloaded.
