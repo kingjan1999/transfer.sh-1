@@ -2,7 +2,7 @@ name: deploy multi-architecture Docker images for transfer.sh with buildx
 
 on:
   schedule:
-    - cron: '0 0 * * *' # everyday at midnight UTC
+    - cron: '0 0 * * 1' # every monday at midnight UTC
   pull_request:
     branches: main
   push:
